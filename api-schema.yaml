@@ -1,0 +1,602 @@
+openapi: 3.0.3
+info:
+  title: StateSpace API
+  version: 1.0.0
+  description: |-
+    A high-performance REST API exposing two algorithmic engines:
+
+    **Matrix** — Strassen's Algorithm (async, Celery + Redis caching).
+    Submit two matrices via POST, get a `job_id`, poll GET until `COMPLETED`.
+
+    **DFA** — NFA/DFA Construction (synchronous).
+    Submit a regex pattern, get NFA + DFA graphs immediately.
+
+    All endpoints require `Authorization: Token <key>` (DRF Token auth).
+    Obtain a token via `POST /api/auth/token/`.
+  contact:
+    name: StateSpace
+  license:
+    name: MIT
+paths:
+  /api/auth/token/:
+    post:
+      operationId: auth_token_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AuthTokenRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AuthTokenRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthTokenRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthToken'
+          description: ''
+  /api/dfa/:
+    get:
+      operationId: dfa_retrieve
+      description: |-
+        Looks up a previously stored NFA/DFA result using the MD5 hex digest of the original regex string.
+
+        The `regex_hash` is returned in the POST response. You can also compute it yourself: `md5(regex.encode()).hexdigest()`.
+      summary: Retrieve a previously constructed NFA/DFA by regex hash
+      tags:
+      - DFA
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DFAResult'
+          description: NFA and DFA graphs for the given regex hash.
+        '404':
+          description: No result found for the given regex_hash.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+    post:
+      operationId: dfa_create
+      description: |-
+        Converts a regular expression through the full automata pipeline and returns both the NFA and DFA as JSON graphs **immediately** (synchronous — no polling required).
+
+        **Pipeline:**
+        1. Shunting Yard Algorithm — infix → postfix
+        2. Thompson's Construction — postfix → NFA
+        3. Subset Construction — NFA → DFA
+
+        Repeated calls with the same regex return the cached DB result (status 200 with `cached: true`) without recomputing.
+
+        **Supported operators:** `|` (union), `*` (Kleene star), `+` (one-or-more), `?` (optional), `()` (grouping). Concatenation is inserted implicitly.
+      summary: Submit a regex for NFA/DFA construction
+      tags:
+      - DFA
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DFAInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DFAInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DFAInputRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DFAResult'
+              examples:
+                (a|b)*c:
+                  value:
+                    regex_hash: 56502077c86c3c65934947092ac786fb
+                    regex_pattern: (a|b)*c
+                    nfa_json:
+                      start_id: 6
+                      end_id: 9
+                      states:
+                        '...': '...'
+                    dfa_json:
+                      start_id: 0
+                      states:
+                      - id: 0
+                        is_end: false
+                        transitions:
+                          a: 3
+                          b: 1
+                          c: 2
+                      - id: 2
+                        is_end: true
+                        transitions: {}
+                    cached: false
+          description: NFA and DFA constructed and stored.
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DFAResult'
+          description: 'Result returned from DB cache (`cached: true`).'
+        '400':
+          description: Missing or unparseable regex.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+  /api/dfa/{regex_hash}/:
+    get:
+      operationId: dfa_retrieve_2
+      description: |-
+        Looks up a previously stored NFA/DFA result using the MD5 hex digest of the original regex string.
+
+        The `regex_hash` is returned in the POST response. You can also compute it yourself: `md5(regex.encode()).hexdigest()`.
+      summary: Retrieve a previously constructed NFA/DFA by regex hash
+      parameters:
+      - in: path
+        name: regex_hash
+        schema:
+          type: string
+        required: true
+      tags:
+      - DFA
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DFAResult'
+          description: NFA and DFA graphs for the given regex hash.
+        '404':
+          description: No result found for the given regex_hash.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+    post:
+      operationId: dfa_create_2
+      description: |-
+        Converts a regular expression through the full automata pipeline and returns both the NFA and DFA as JSON graphs **immediately** (synchronous — no polling required).
+
+        **Pipeline:**
+        1. Shunting Yard Algorithm — infix → postfix
+        2. Thompson's Construction — postfix → NFA
+        3. Subset Construction — NFA → DFA
+
+        Repeated calls with the same regex return the cached DB result (status 200 with `cached: true`) without recomputing.
+
+        **Supported operators:** `|` (union), `*` (Kleene star), `+` (one-or-more), `?` (optional), `()` (grouping). Concatenation is inserted implicitly.
+      summary: Submit a regex for NFA/DFA construction
+      parameters:
+      - in: path
+        name: regex_hash
+        schema:
+          type: string
+        required: true
+      tags:
+      - DFA
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DFAInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DFAInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DFAInputRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DFAResult'
+              examples:
+                (a|b)*c:
+                  value:
+                    regex_hash: 56502077c86c3c65934947092ac786fb
+                    regex_pattern: (a|b)*c
+                    nfa_json:
+                      start_id: 6
+                      end_id: 9
+                      states:
+                        '...': '...'
+                    dfa_json:
+                      start_id: 0
+                      states:
+                      - id: 0
+                        is_end: false
+                        transitions:
+                          a: 3
+                          b: 1
+                          c: 2
+                      - id: 2
+                        is_end: true
+                        transitions: {}
+                    cached: false
+          description: NFA and DFA constructed and stored.
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DFAResult'
+          description: 'Result returned from DB cache (`cached: true`).'
+        '400':
+          description: Missing or unparseable regex.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+  /api/matrix/:
+    get:
+      operationId: matrix_retrieve
+      description: |-
+        Returns the current status of a matrix multiplication job.
+
+        | status | meaning |
+        |--------|----------|
+        | `PENDING` | Job queued, not yet picked up by a worker |
+        | `PROCESSING` | Worker is computing |
+        | `COMPLETED` | `result` field contains the 2-D product matrix |
+        | `FAILED` | `error` field explains why (e.g. incompatible dimensions) |
+      summary: Poll job status and retrieve result
+      tags:
+      - Matrix
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatrixJobStatus'
+              examples:
+                COMPLETED:
+                  value:
+                    job_id: 550e8400-...
+                    status: COMPLETED
+                    result:
+                    - - 19
+                      - 22
+                    - - 43
+                      - 50
+                PENDING:
+                  value:
+                    job_id: 550e8400-...
+                    status: PENDING
+                    result: null
+                FAILED:
+                  value:
+                    job_id: 550e8400-...
+                    status: FAILED
+                    result: null
+                    error: 'Cannot multiply: A is 1×3, B is 2×2.'
+          description: Job found. Check `status` field.
+        '404':
+          description: No job found for the given job_id.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+    post:
+      operationId: matrix_create
+      description: |-
+        Accepts two matrices and dispatches an asynchronous Celery task to compute A × B using **Strassen's Algorithm** (O(n^2.807)).
+
+        Returns **202 Accepted** immediately with a `job_id`. Poll `GET /api/matrix/<job_id>/` for the result.
+
+        Results are cached in Redis (24h) and the DB so identical inputs skip computation entirely.
+      summary: Submit a matrix multiplication job
+      tags:
+      - Matrix
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MatrixInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MatrixInputRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatrixJobAccepted'
+              examples:
+                Accepted:
+                  value:
+                    job_id: 550e8400-e29b-41d4-a716-446655440000
+                    status: PENDING
+                    message: Job accepted. Poll GET /api/matrix/550e8400-.../ for
+                      result.
+          description: Job accepted and queued for processing.
+        '400':
+          description: Missing or malformed matrix input.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+  /api/matrix/{job_id}/:
+    get:
+      operationId: matrix_retrieve_2
+      description: |-
+        Returns the current status of a matrix multiplication job.
+
+        | status | meaning |
+        |--------|----------|
+        | `PENDING` | Job queued, not yet picked up by a worker |
+        | `PROCESSING` | Worker is computing |
+        | `COMPLETED` | `result` field contains the 2-D product matrix |
+        | `FAILED` | `error` field explains why (e.g. incompatible dimensions) |
+      summary: Poll job status and retrieve result
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Matrix
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatrixJobStatus'
+              examples:
+                COMPLETED:
+                  value:
+                    job_id: 550e8400-...
+                    status: COMPLETED
+                    result:
+                    - - 19
+                      - 22
+                    - - 43
+                      - 50
+                PENDING:
+                  value:
+                    job_id: 550e8400-...
+                    status: PENDING
+                    result: null
+                FAILED:
+                  value:
+                    job_id: 550e8400-...
+                    status: FAILED
+                    result: null
+                    error: 'Cannot multiply: A is 1×3, B is 2×2.'
+          description: Job found. Check `status` field.
+        '404':
+          description: No job found for the given job_id.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+    post:
+      operationId: matrix_create_2
+      description: |-
+        Accepts two matrices and dispatches an asynchronous Celery task to compute A × B using **Strassen's Algorithm** (O(n^2.807)).
+
+        Returns **202 Accepted** immediately with a `job_id`. Poll `GET /api/matrix/<job_id>/` for the result.
+
+        Results are cached in Redis (24h) and the DB so identical inputs skip computation entirely.
+      summary: Submit a matrix multiplication job
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Matrix
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatrixInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MatrixInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MatrixInputRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - tokenAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatrixJobAccepted'
+              examples:
+                Accepted:
+                  value:
+                    job_id: 550e8400-e29b-41d4-a716-446655440000
+                    status: PENDING
+                    message: Job accepted. Poll GET /api/matrix/550e8400-.../ for
+                      result.
+          description: Job accepted and queued for processing.
+        '400':
+          description: Missing or malformed matrix input.
+        '401':
+          description: Authentication credentials were not provided or are invalid.
+components:
+  schemas:
+    AuthToken:
+      type: object
+      properties:
+        token:
+          type: string
+          readOnly: true
+      required:
+      - token
+    AuthTokenRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    DFAInputRequest:
+      type: object
+      properties:
+        regex:
+          type: string
+          minLength: 1
+          description: Regular expression in infix notation, e.g. `(a|b)*c`.
+          maxLength: 255
+      required:
+      - regex
+    DFAResult:
+      type: object
+      properties:
+        regex_hash:
+          type: string
+          description: MD5 hex digest of the regex. Use as the GET lookup key.
+        regex_pattern:
+          type: string
+          description: The original regex string submitted.
+        nfa_json:
+          type: object
+          additionalProperties: {}
+          description: NFA graph produced by Thompson's Construction. Contains `start_id`,
+            `end_id`, and `states` (recursive adjacency structure).
+        dfa_json:
+          type: object
+          additionalProperties: {}
+          description: DFA graph produced by Subset Construction. Contains `start_id`
+            and a flat `states` list with `id`, `is_end`, and `transitions` (char
+            → state_id).
+        cached:
+          type: boolean
+          description: True if the result was returned from the database cache.
+      required:
+      - dfa_json
+      - nfa_json
+      - regex_hash
+      - regex_pattern
+    MatrixInputRequest:
+      type: object
+      properties:
+        matrix_a:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+          description: First matrix as a 2-D array of numbers.
+        matrix_b:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+          description: Second matrix as a 2-D array of numbers.
+      required:
+      - matrix_a
+      - matrix_b
+    MatrixJobAccepted:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: Unique job identifier. Use this to poll for the result.
+        status:
+          type: string
+          description: Always "PENDING" immediately after submission.
+        message:
+          type: string
+          description: Human-readable polling hint.
+      required:
+      - job_id
+      - message
+      - status
+    MatrixJobStatus:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          description: |-
+            Current lifecycle state of the job.
+
+            * `PENDING` - PENDING
+            * `PROCESSING` - PROCESSING
+            * `COMPLETED` - COMPLETED
+            * `FAILED` - FAILED
+        result:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+          nullable: true
+          description: The 2-D result matrix. Null until status is COMPLETED.
+        error:
+          type: string
+          description: Error message. Only present when status is FAILED.
+      required:
+      - job_id
+      - result
+      - status
+    StatusEnum:
+      enum:
+      - PENDING
+      - PROCESSING
+      - COMPLETED
+      - FAILED
+      type: string
+      description: |-
+        * `PENDING` - PENDING
+        * `PROCESSING` - PROCESSING
+        * `COMPLETED` - COMPLETED
+        * `FAILED` - FAILED
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'Token-based authentication. Value format: `Token <your-token>`'

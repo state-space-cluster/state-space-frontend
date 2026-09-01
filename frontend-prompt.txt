@@ -1,0 +1,51 @@
+You are an expert frontend engineer inside the Antigravity IDE.
+
+CONTEXT:
+This workspace contains `api-schema.yaml` (an OpenAPI 3.0.3 spec for the "StateSpace" backend). The `api-schema.yaml` file is the strict, authoritative source of truth for routes, request/response shapes, and auth requirements.
+
+TASK:
+Analyze `api-schema.yaml` and generate a complete React + TypeScript frontend that exercises every endpoint it defines:
+- `POST /api/auth/token/` — obtain a DRF auth token from username/password
+- `POST /api/matrix/` — submit a matrix multiplication job (returns 202 + job_id)
+- `GET /api/matrix/{job_id}/` — poll job status (PENDING/PROCESSING/COMPLETED/FAILED)
+- `POST /api/dfa/` — submit a regex, get NFA + DFA graphs back synchronously
+- `GET /api/dfa/{regex_hash}/` — look up a previously computed DFA result
+
+REQUIREMENTS:
+
+1. TYPE GENERATION
+   - Create `src/types.ts` with strict TypeScript interfaces for every schema under `components.schemas` (AuthToken, AuthTokenRequest, DFAInputRequest, DFAResult, MatrixInputRequest, MatrixJobAccepted, MatrixJobStatus, StatusEnum, etc.). No `any`.
+   - Also define a generic `ApiError` interface (`{ detail?: string; [field: string]: unknown }`) to type 400/401/404 responses, since the schema doesn't define error bodies explicitly.
+
+2. AUTH
+   - Build a login form (username/password) that calls `POST /api/auth/token/` and stores the returned token (React state + sessionStorage is fine; note that this is a demo-grade token store, not production-secure).
+   - The API client must attach `Authorization: Token <token>` to every subsequent request. If a request comes back 401, surface a clear "session expired, please log in again" state and clear the stored token.
+
+3. API CLIENT
+   - Create `src/api/client.ts`: a typed fetch wrapper with one function per endpoint above, each taking/returning the interfaces from `types.ts`.
+   - Base URL must come from an environment variable (e.g. `VITE_API_BASE_URL`, default `http://localhost:8000`) — do not hardcode it.
+   - Centralize error handling: non-2xx responses should throw/return a typed `ApiError`.
+
+4. REACT COMPONENTS
+   - Scaffold with Vite + React + TypeScript.
+   - `LoginForm` — username/password, disables submit while loading, shows API error.
+   - `MatrixForm` — inputs for two matrices (simple JSON-textarea or dynamic grid editor, your choice) and an algorithm selector; on submit, calls the matrix POST endpoint, then polls `GET /api/matrix/{job_id}/` every 1.5s with a capped number of attempts (e.g. 20) or a max timeout (e.g. 60s), showing PENDING/PROCESSING states and stopping cleanly on COMPLETED or FAILED. Clean up the poll interval on unmount.
+   - `MatrixResult` — renders the 2D result matrix as a table, or the `error` field if FAILED.
+   - `DfaForm` — text input for a regex pattern, submits to the DFA POST endpoint, shows a `cached: true/false` badge.
+   - `AutomatonGraphView` — after a successful submission, render BOTH the NFA and the DFA as interactive state diagrams, switchable via a tab/toggle ("NFA" / "DFA") within the same result panel:
+     - `DfaGraphPanel` — parses `dfa_json` (`start_id`, flat `states` list with `id`, `is_end`, `transitions`: char → state_id). Renders nodes + labeled directed edges. Mark the start state and all `is_end` (accepting) states visually.
+     - `NfaGraphPanel` — parses `nfa_json` separately; do NOT reuse the DFA parser. Treat its shape as the recursive adjacency structure described by the schema (`start_id`, `end_id`, `states`), inspect the actual returned JSON shape at runtime and adapt rather than assuming it mirrors `dfa_json`. Render epsilon (ε) transitions distinctly (e.g. dashed edge, "ε" label) from character transitions, and support multiple parallel edges between the same pair of nodes (Thompson's Construction produces these) — don't silently collapse them into one edge. Mark the single start state and single end state.
+     - **String simulation ("interactive" requirement):** both panels include a text input where the user types a candidate string and a "Run" control (plus Step/Play/Reset if feasible) that animates the matching process — highlighting the current state(s) and the edge just traversed as each character is consumed. For the DFA this is a single active state per step. For the NFA this must track the full active *set* of states per step (including epsilon-closures) and highlight all of them, since NFA matching is inherently multi-path. At the end, visually indicate whether the string is accepted (an `is_end`/end state is active) or rejected.
+   - `DfaLookup` — a field to paste a `regex_hash` and call the GET-by-hash endpoint directly; a successful lookup should populate the same `AutomatonGraphView` (NFA + DFA tabs) as a fresh submission.
+   - A top-level `Dashboard` that ties these together behind the login gate, with tabs/sections for Matrix and DFA.
+   - All async components must handle: idle, loading, error, and success states distinctly and visibly.
+
+5. VALIDATION
+   - Form inputs must be validated client-side against the schema's constraints before submitting: `regex` non-empty and ≤255 chars; matrices must be well-formed 2D numeric arrays; username/password non-empty.
+   - Disable submit buttons until validation passes; show inline field errors.
+
+DELIVERY:
+1. First, produce an interactive Artifact/plan listing the files you'll create and the component tree.
+2. Then generate the files across the workspace (Vite scaffold, `src/types.ts`, `src/api/client.ts`, `src/components/*`, `.env.example` with `VITE_API_BASE_URL`).
+3. Run the TypeScript compiler (`tsc --noEmit`) and confirm it passes with zero errors against the generated types.
+4. Summarize any assumptions you made where the schema was ambiguous (e.g., error body shape, matrix input UI pattern, and especially the exact `nfa_json` structure — the schema only guarantees `additionalProperties: {}`, so state the recursive shape you inferred/tested against and note that the NFA parser may need adjustment once run against a live response).
