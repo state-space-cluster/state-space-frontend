@@ -8,6 +8,7 @@ import type {
   ApiError,
   AuthToken,
   AuthTokenRequest,
+  RegisterRequest,
   DFAInputRequest,
   DFAResult,
   MatrixInputRequest,
@@ -138,6 +139,19 @@ export async function login(credentials: AuthTokenRequest): Promise<AuthToken> {
   return apiFetch<AuthToken>('/api/auth/token/', {
     method: 'POST',
     body: credentials,
+    skipAuth: true,
+  });
+}
+
+/**
+ * POST /api/auth/register/
+ * Create a new account. Returns a token on success (auto-login).
+ * Does NOT attach an Authorization header.
+ */
+export async function register(data: RegisterRequest): Promise<AuthToken> {
+  return apiFetch<AuthToken>('/api/auth/register/', {
+    method: 'POST',
+    body: data,
     skipAuth: true,
   });
 }

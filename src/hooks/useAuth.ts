@@ -4,22 +4,27 @@ import {
   setToken as persistToken,
   clearToken,
   login as apiLogin,
+  register as apiRegister,
   SESSION_EXPIRED_EVENT,
 } from '../api/client';
-import type { AuthTokenRequest } from '../types';
+import type { AuthTokenRequest, RegisterRequest } from '../types';
 
 export interface UseAuthReturn {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isRegistering: boolean;
   error: string | null;
   login: (credentials: AuthTokenRequest) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
+  clearError: () => void;
 }
 
 export function useAuth(): UseAuthReturn {
   const [token, setToken] = useState<string | null>(() => getToken());
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading,     setIsLoading]     = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Listen for 401 → session-expired events from the API client
@@ -48,18 +53,39 @@ export function useAuth(): UseAuthReturn {
     }
   }, []);
 
+  const register = useCallback(async (data: RegisterRequest) => {
+    setIsRegistering(true);
+    setError(null);
+    try {
+      const result = await apiRegister(data);
+      persistToken(result.token);
+      setToken(result.token);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      setError(message);
+    } finally {
+      setIsRegistering(false);
+    }
+  }, []);
+
   const logout = useCallback(() => {
     clearToken();
     setToken(null);
     setError(null);
   }, []);
 
+  const clearError = useCallback(() => setError(null), []);
+
   return {
     token,
     isAuthenticated: token !== null,
     isLoading,
+    isRegistering,
     error,
     login,
+    register,
     logout,
+    clearError,
   };
 }

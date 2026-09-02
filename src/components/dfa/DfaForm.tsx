@@ -4,6 +4,12 @@ import type { DFAResult } from '../../types';
 
 interface DfaFormProps {
   onResult: (result: DFAResult) => void;
+  /** Called instead of submitting when the guest usage limit is reached. */
+  onLimitReached?: () => void;
+  /** Whether this guest has reached their DFA request limit. */
+  isLimitReached?: boolean;
+  /** Increments the guest DFA counter after a successful submission. */
+  onSuccess?: () => void;
 }
 
 function validateRegex(regex: string): string | null {
@@ -12,7 +18,7 @@ function validateRegex(regex: string): string | null {
   return null;
 }
 
-export function DfaForm({ onResult }: DfaFormProps) {
+export function DfaForm({ onResult, onLimitReached, isLimitReached, onSuccess }: DfaFormProps) {
   const [regex, setRegex] = useState('');
   const [touched, setTouched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,11 +33,19 @@ export function DfaForm({ onResult }: DfaFormProps) {
     const err = validateRegex(regex);
     if (err) return;
 
+    // Guest limit gate
+    if (isLimitReached) {
+      onLimitReached?.();
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
       const result = await submitDfa({ regex: regex.trim() });
       onResult(result);
+      // Increment guest counter on successful submission
+      onSuccess?.();
     } catch (err) {
       const msg =
         err instanceof ApiClientError

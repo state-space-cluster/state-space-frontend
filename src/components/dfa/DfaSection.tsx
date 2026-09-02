@@ -4,7 +4,13 @@ import { DfaLookup } from './DfaLookup';
 import { AutomatonGraphView } from './AutomatonGraphView';
 import type { DFAResult } from '../../types';
 
-export function DfaSection() {
+interface DfaSectionProps {
+  onLimitReached?: () => void;
+  isLimitReached?: boolean;
+  onSuccess?: () => void;
+}
+
+export function DfaSection({ onLimitReached, isLimitReached, onSuccess }: DfaSectionProps) {
   const [result, setResult] = useState<DFAResult | null>(null);
 
   const handleResult = (r: DFAResult) => {
@@ -25,7 +31,12 @@ export function DfaSection() {
 
       <div className="card">
         <h3 style={{ marginBottom: '1rem' }}>Submit Regex</h3>
-        <DfaForm onResult={handleResult} />
+        <DfaForm
+          onResult={handleResult}
+          onLimitReached={onLimitReached}
+          isLimitReached={isLimitReached}
+          onSuccess={onSuccess}
+        />
       </div>
 
       <div className="card card--sm">

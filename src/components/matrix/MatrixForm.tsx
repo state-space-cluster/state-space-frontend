@@ -139,7 +139,16 @@ const INITIAL: FormState = {
   bCellErrors: [[false, false], [false, false]],
 };
 
-export function MatrixForm() {
+interface MatrixFormProps {
+  /** Called instead of submitting when the guest usage limit is reached. */
+  onLimitReached?: () => void;
+  /** Whether this guest has reached their matrix request limit. */
+  isLimitReached?: boolean;
+  /** Increments the guest matrix counter after a successful submission. */
+  onSuccess?: () => void;
+}
+
+export function MatrixForm({ onLimitReached, isLimitReached, onSuccess }: MatrixFormProps) {
   const [mode, setMode] = useState<InputMode>('grid');
   const [fs, setFs] = useState<FormState>(INITIAL);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -190,6 +199,12 @@ export function MatrixForm() {
     setSubmitError(null);
     reset();
 
+    // Guest limit gate
+    if (isLimitReached) {
+      onLimitReached?.();
+      return;
+    }
+
     let matrixA: number[][] | null = null;
     let matrixB: number[][] | null = null;
 
@@ -219,6 +234,8 @@ export function MatrixForm() {
     try {
       const accepted = await submitMatrix({ matrix_a: matrixA, matrix_b: matrixB });
       startPolling(accepted.job_id);
+      // Increment guest counter on successful job submission
+      onSuccess?.();
     } catch (err) {
       const msg = err instanceof ApiClientError
         ? (err.body.detail ?? err.message)

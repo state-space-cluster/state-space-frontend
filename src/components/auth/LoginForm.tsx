@@ -3,6 +3,7 @@ import type { UseAuthReturn } from '../../hooks/useAuth';
 
 interface LoginFormProps {
   auth: UseAuthReturn;
+  onSwitchToRegister?: () => void;
 }
 
 interface FieldErrors {
@@ -17,7 +18,7 @@ function validate(username: string, password: string): FieldErrors {
   return errors;
 }
 
-export function LoginForm({ auth }: LoginFormProps) {
+export function LoginForm({ auth, onSwitchToRegister }: LoginFormProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -41,109 +42,97 @@ export function LoginForm({ auth }: LoginFormProps) {
   };
 
   return (
-    <div className="login-page">
-      <div className="card login-card" role="main">
-        <header className="login-card__header">
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              margin: '0 auto 1rem',
-              background: 'linear-gradient(135deg, var(--clr-primary), var(--clr-accent-dim))',
-              borderRadius: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.6rem',
-              boxShadow: 'var(--shadow-glow)',
-            }}
-            aria-hidden="true"
-          >
-            S²
-          </div>
-          <h1 style={{ fontSize: '1.6rem' }}>StateSpace</h1>
-          <p className="login-card__subtitle">Sign in to access the algorithmic engine.</p>
-        </header>
+    <div>
+      {auth.error && (
+        <div className="alert alert--error" role="alert" id="login-error-banner" style={{ marginBottom: '1rem' }}>
+          <span aria-hidden="true">⚠</span>
+          <span>{auth.error}</span>
+        </div>
+      )}
 
-        {auth.error && (
-          <div className="alert alert--error" role="alert" id="login-error-banner">
-            <span aria-hidden="true">⚠</span>
-            <span>{auth.error}</span>
-          </div>
-        )}
+      <form className="stack" onSubmit={handleSubmit} noValidate aria-label="Login form">
+        <div className="field">
+          <label className="field__label" htmlFor="input-username">
+            Username
+          </label>
+          <input
+            id="input-username"
+            className={`field__input${touched.username && fieldErrors.username ? ' field__input--error' : ''}`}
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onBlur={() => handleBlur('username')}
+            disabled={auth.isLoading}
+            placeholder="your_username"
+            aria-describedby={
+              touched.username && fieldErrors.username ? 'err-username' : undefined
+            }
+            aria-invalid={touched.username && !!fieldErrors.username}
+          />
+          {touched.username && fieldErrors.username && (
+            <span className="field__error" id="err-username" role="alert">
+              {fieldErrors.username}
+            </span>
+          )}
+        </div>
 
-        <form className="stack" onSubmit={handleSubmit} noValidate aria-label="Login form">
-          <div className="field">
-            <label className="field__label" htmlFor="input-username">
-              Username
-            </label>
-            <input
-              id="input-username"
-              className={`field__input${touched.username && fieldErrors.username ? ' field__input--error' : ''}`}
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onBlur={() => handleBlur('username')}
-              disabled={auth.isLoading}
-              placeholder="your_username"
-              aria-describedby={
-                touched.username && fieldErrors.username ? 'err-username' : undefined
-              }
-              aria-invalid={touched.username && !!fieldErrors.username}
-            />
-            {touched.username && fieldErrors.username && (
-              <span className="field__error" id="err-username" role="alert">
-                {fieldErrors.username}
-              </span>
-            )}
-          </div>
+        <div className="field">
+          <label className="field__label" htmlFor="input-password">
+            Password
+          </label>
+          <input
+            id="input-password"
+            className={`field__input${touched.password && fieldErrors.password ? ' field__input--error' : ''}`}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => handleBlur('password')}
+            disabled={auth.isLoading}
+            placeholder="••••••••"
+            aria-describedby={
+              touched.password && fieldErrors.password ? 'err-password' : undefined
+            }
+            aria-invalid={touched.password && !!fieldErrors.password}
+          />
+          {touched.password && fieldErrors.password && (
+            <span className="field__error" id="err-password" role="alert">
+              {fieldErrors.password}
+            </span>
+          )}
+        </div>
 
-          <div className="field">
-            <label className="field__label" htmlFor="input-password">
-              Password
-            </label>
-            <input
-              id="input-password"
-              className={`field__input${touched.password && fieldErrors.password ? ' field__input--error' : ''}`}
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onBlur={() => handleBlur('password')}
-              disabled={auth.isLoading}
-              placeholder="••••••••"
-              aria-describedby={
-                touched.password && fieldErrors.password ? 'err-password' : undefined
-              }
-              aria-invalid={touched.password && !!fieldErrors.password}
-            />
-            {touched.password && fieldErrors.password && (
-              <span className="field__error" id="err-password" role="alert">
-                {fieldErrors.password}
-              </span>
-            )}
-          </div>
-
-          <button
-            id="btn-login-submit"
-            type="submit"
-            className="btn btn--primary"
-            disabled={auth.isLoading || (Object.keys(touched).some(Boolean) && !isValid)}
-            style={{ marginTop: '0.5rem' }}
-          >
-            {auth.isLoading && <span className="spinner" aria-hidden="true" />}
-            {auth.isLoading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-
-        <p
-          style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.75rem' }}
-          className="field__hint"
+        <button
+          id="btn-login-submit"
+          type="submit"
+          className="btn btn--primary"
+          disabled={auth.isLoading || (Object.keys(touched).some(Boolean) && !isValid)}
+          style={{ marginTop: '0.5rem' }}
         >
-          Token stored in <code>sessionStorage</code> — cleared when you close this tab.
+          {auth.isLoading && <span className="spinner" aria-hidden="true" />}
+          {auth.isLoading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+
+      {onSwitchToRegister && (
+        <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }}
+           className="field__hint">
+          Don't have an account?{' '}
+          <button
+            id="btn-switch-to-register"
+            type="button"
+            onClick={onSwitchToRegister}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--clr-primary)', fontWeight: 600, fontSize: 'inherit',
+              padding: 0,
+            }}
+          >
+            Sign up
+          </button>
         </p>
-      </div>
+      )}
     </div>
   );
 }

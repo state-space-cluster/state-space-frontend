@@ -13,6 +13,13 @@ export interface AuthTokenRequest {
   password: string;
 }
 
+/** POST /api/auth/register/ — request body */
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+}
+
 /** POST /api/auth/token/ — 200 response */
 export interface AuthToken {
   token: string;
